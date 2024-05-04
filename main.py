@@ -11,6 +11,11 @@ class Node:
         self.children = []
         self.parent = parent
         self.weight = weight
+    def __repr__(self, level=0):
+        ret = "\t" * level + repr(self.key) + "\n"
+        for child in self.children:
+            ret += child.__repr__(level + 1)
+        return ret
 
     # receive information from the commanding node or child node and spread if necessary
     def receive_event(self, event):
@@ -28,6 +33,9 @@ class Node:
 
 
 class Root(Node):
+    def __init__(self, key, parent, weight, model):
+        super(Root, self).__init__(key, parent, weight)
+        self.model = model
     # print tree in order from left to right
     def inorder(self, node):
         nodes = []
@@ -37,6 +45,9 @@ class Root(Node):
                 childNodes = self.inorder(child)
                 nodes += childNodes
         return nodes
+
+    def predict(self, features):
+        print(self.model.predict(features))
 
     def weightNode(self, node):
         weight = 0
@@ -85,13 +96,70 @@ class Root(Node):
                 for child in node.children:
                     child.parent = node.parent
         else:
-            node = None
+            if node.children:
+                oldchildren = node.children[0].children
+                node.children[0] = Root(node.children[0].key, None, node.children[0].weight, node.model)
+                node.children[0].children = oldchildren
+                for child in node.children:
+                    if child != node.children[0]:
+                        child.parent = node.children[0]
+                        node.children[0].children.append(child)
+                return node.children[0]
+            else:
+                return None
+        return self
+
+
+def proper_round(num, dec=0):
+    num = str(num)[:str(num).index('.')+dec+2]
+    if num[-1]>='5':
+        return float(num[:-2-(not dec)]+str(int(num[-2-(not dec)])+1))
+    return float(num[:-1])
+
 
 
 if __name__ == '__main__':
+    import pandas as pd
+    import numpy as np
+
+    features = pd.read_csv('testing.csv')
+    print(features.head(5))
+    print('The shape of our features is:', features.shape)
+    print(features.describe())
+
+
+    labels = np.array(features['engageType'])
+    features = features.drop('engageType', axis=1)
+    feature_list = list(features.columns)
+    features = np.array(features)
+    from sklearn.model_selection import train_test_split
+
+    train_features, test_features, train_labels, test_labels = train_test_split(features, labels, test_size=0.25,
+                                                                                random_state=42)
+    print('Training Features Shape:', train_features.shape)
+    print('Training Labels Shape:', train_labels.shape)
+    print('Testing Features Shape:', test_features.shape)
+    print('Testing Labels Shape:', test_labels.shape)
+    from sklearn.ensemble import RandomForestRegressor
+
+    rf = RandomForestRegressor(n_estimators=1000, random_state=42)
+    rf.fit(train_features, train_labels);
+    predictions = rf.predict(test_features)
+    for i in range(len(predictions)):
+        predictions[i] = proper_round(predictions[i])
+    errors = abs(predictions - test_labels)
+    print('Mean Absolute Error:', round(np.mean(errors), 2))
+    accuracy = 100 - sum(x != 0 for x in errors) / len(errors) * 100
+    print('Accuracy:', round(accuracy, 2), '%.')
+
+    importances = list(rf.feature_importances_)
+    feature_importances = [(feature, round(importance, 2)) for feature, importance in zip(feature_list, importances)]
+    feature_importances = sorted(feature_importances, key=lambda x: x[1], reverse=True)
+    [print('Variable: {:20} Importance: {}'.format(*pair)) for pair in feature_importances];
     # tree rebuilding testing
-    root = Root(5, None, 5)
+    root = Root(5, None, 5, rf)
     root.insert(2, 5, 1)
+    root.insert(22, 5, 1)
     root.insert(7, 2, 1)
     root.insert(6, 2, 1)
     root.insert(8, 7, 1)
@@ -99,6 +167,13 @@ if __name__ == '__main__':
     root.insert(10, 8, 6)
     root.insert(11, 8, 3)
     root.insert(12, 10, 2)
+
     node = root.find(root, 8)
-    root.delete_node(node)
+    root = root.delete_node(node)
     print(root.inorder(root))
+    print(root)
+    node = root.find(root, 5)
+    root = root.delete_node(node)
+    print(root)
+    features = np.array([[2,4,2,0,0,1,0,1]])
+    root.predict(features)
