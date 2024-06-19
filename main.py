@@ -19,17 +19,19 @@ class Node:
 
     # receive information from the commanding node or child node and spread if necessary
     def receive_event(self, event):
-        print("foo received")
-        self.send_event(event, event.spread_up, event.spread_down)
+        print(str(self.key) + ": received " + event.info)
+        self.send_event(event)
 
     # send information to the commanding node or child nodes
-    def send_event(self, event, send_parent=False, send_child=True):
-        if send_parent and self.parent:
-            print("parent bar sent")
-        if send_child:
+    def send_event(self, event):
+        if event.spread_up and self.parent:
+            print(str(self.key) + ": sent " + event.info)
+            self.parent.receive_event(event)
+        if event.spread_down:
             if self.children:
                 for child in self.children:
-                    print("Child event sent")
+                    print(str(self.key) + ": sent " + event.info)
+                    child.receive_event(event)
 
 
 class Root(Node):
@@ -97,14 +99,16 @@ class Root(Node):
                     child.parent = node.parent
         else:
             if node.children:
-                oldchildren = node.children[0].children
-                node.children[0] = Root(node.children[0].key, None, node.children[0].weight, node.model)
-                node.children[0].children = oldchildren
+
+                childWeight = []
                 for child in node.children:
-                    if child != node.children[0]:
-                        child.parent = node.children[0]
-                        node.children[0].children.append(child)
-                return node.children[0]
+                    childWeight.append(self.weightNode(child))
+                node.children[childWeight.index(min(childWeight))] = Root(node.children[childWeight.index(min(childWeight))].key, None, node.children[childWeight.index(min(childWeight))].weight, node.model)
+                for child in node.children:
+                    if child != node.children[childWeight.index(min(childWeight))]:
+                        child.parent = node.children[childWeight.index(min(childWeight))]
+                        node.children[childWeight.index(min(childWeight))].children.append(child)
+                return node.children[childWeight.index(min(childWeight))]
             else:
                 return None
         return self
@@ -128,8 +132,8 @@ if __name__ == '__main__':
     print(features.describe())
 
 
-    labels = np.array(features['engageType'])
-    features = features.drop('engageType', axis=1)
+    labels = np.array(features['p9'])
+    features = features.drop('p9', axis=1)
     feature_list = list(features.columns)
     features = np.array(features)
     from sklearn.model_selection import train_test_split
@@ -167,13 +171,21 @@ if __name__ == '__main__':
     root.insert(10, 8, 6)
     root.insert(11, 8, 3)
     root.insert(12, 10, 2)
+    print(root)
+    root.send_event(TreeEvent("foo", False, True))
 
     node = root.find(root, 8)
     root = root.delete_node(node)
     print(root.inorder(root))
+    print("Структура дерева:")
     print(root)
+    print("Видаляю елемент 5")
     node = root.find(root, 5)
     root = root.delete_node(node)
+    print("Структура дерева:")
     print(root)
     features = np.array([[2,4,2,0,0,1,0,1]])
+    print("Отримані параметри: ")
+    print(features)
+    print("За заданими параметрами було прийнято рішення:\n(1 - зробити фотографію\n0 - не робити фотографію)")
     root.predict(features)
